@@ -51,6 +51,11 @@ export default function App() {
           <option value="medium">Medium (2 methods)</option>
           <option value="high">High (3+ methods)</option>
         </select>
+            <div style={{ margin: '12px 0', fontSize: '13px', lineHeight: '2' }}>
+            <div><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#cccccc', marginRight: 8 }} /> Low confidence (1 method)</div>
+            <div><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', marginRight: 8 }} /> Medium confidence (2 methods)</div>
+            <div><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#dc2626', marginRight: 8 }} /> High confidence (3+ methods)</div>
+          </div>
 
         {selected && (
           <div className="detail">
