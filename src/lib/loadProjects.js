@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'
+import { supabase } from './supabase'
 
 const COLUMNS =
   'parcel_id, status, data_sources, confidence_count, subdivision, address, zipcode, new_construction_val, saledate, owner, plat_app_no, plat_status, lat, lon'
