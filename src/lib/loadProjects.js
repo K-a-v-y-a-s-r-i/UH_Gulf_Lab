@@ -5,10 +5,10 @@ import { supabase } from './supabase.js';
 export async function loadProjects() {
   if (supabase) {
     const { data, error } = await supabase
-      .from('student_projects')
-      .select('id, name, county, city, status, lat, lon, announced_at')
-      .order('name');
-
+      .from('development_parcels')
+      .select('parcel_id, status, data_sources, confidence_count, subdivision, address, zipcode, new_construction_val, saledate, owner, plat_app_no, plat_status, lat, lon')
+      .order('parcel_id', { ascending: true })
+      .limit(5000);
     if (!error) return { projects: data, source: 'supabase' };
     console.warn('Supabase query failed, using sample data:', error.message);
   }

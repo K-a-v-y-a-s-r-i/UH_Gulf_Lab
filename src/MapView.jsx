@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
-import { STATUS_COLORS } from './statusColors.js';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
-const TEXAS_CENTER = [-99.5, 31.2];
+const HARRIS_COUNTY_CENTER = [-95.4, 29.9];
 
 function toGeoJSON(projects) {
   return {
@@ -13,7 +12,7 @@ function toGeoJSON(projects) {
       .filter((p) => p.lat != null && p.lon != null)
       .map((p) => ({
         type: 'Feature',
-        id: p.id,
+        id: p.parcel_id,
         geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
         properties: p,
       })),
@@ -24,44 +23,91 @@ export default function MapView({ projects, selectedId, onSelect }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
 
-  // Create the map once.
   useEffect(() => {
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: TEXAS_CENTER,
-      zoom: 5,
+      center: HARRIS_COUNTY_CENTER,
+      zoom: 9,
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
-      map.addSource('projects', { type: 'geojson', data: toGeoJSON([]) });
+      map.addSource('projects', {
+        type: 'geojson',
+        data: toGeoJSON([]),
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50,
+      });
+
+      // Clustered bubble
       map.addLayer({
-        id: 'projects-circles',
+        id: 'clusters',
         type: 'circle',
         source: 'projects',
+        filter: ['has', 'point_count'],
         paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 5, 10, 12],
-          'circle-color': [
-            'match', ['get', 'status'],
-            ...Object.entries(STATUS_COLORS).flat(),
-            STATUS_COLORS.unknown,
-          ],
-          'circle-stroke-width': 1.5,
+          'circle-color': '#60a5fa',
+          'circle-radius': ['step', ['get', 'point_count'], 14, 25, 20, 100, 28, 750, 36],
+          'circle-opacity': 0.75,
+          'circle-stroke-width': 1,
           'circle-stroke-color': '#ffffff',
         },
       });
 
-      map.on('click', 'projects-circles', (e) => onSelect(e.features[0].properties.id));
-      map.on('mouseenter', 'projects-circles', () => { map.getCanvas().style.cursor = 'pointer'; });
-      map.on('mouseleave', 'projects-circles', () => { map.getCanvas().style.cursor = ''; });
+      // Count label on each cluster
+      map.addLayer({
+        id: 'cluster-count',
+        type: 'symbol',
+        source: 'projects',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['DIN Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12,
+        },
+        paint: { 'text-color': '#ffffff' },
+      });
+
+      // Individual points (only shown once zoomed in past clusterMaxZoom)
+      map.addLayer({
+        id: 'unclustered-point',
+        type: 'circle',
+        source: 'projects',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-radius': ['step', ['get', 'confidence_count'], 3, 2, 5, 3, 7],
+          'circle-color': ['step', ['get', 'confidence_count'], '#cccccc', 2, '#f59e0b', 3, '#dc2626'],
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.85,
+        },
+      });
+
+      // Click a cluster → zoom in to expand it
+      map.on('click', 'clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource('projects').getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          map.easeTo({ center: features[0].geometry.coordinates, zoom });
+        });
+      });
+
+      // Click an individual point → select it (shows in sidebar)
+      map.on('click', 'unclustered-point', (e) => onSelect(e.features[0].properties.parcel_id));
+
+      ['clusters', 'unclustered-point'].forEach((layer) => {
+        map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+      });
     });
 
     mapRef.current = map;
     return () => map.remove();
   }, []);
 
-  // Push new data into the map whenever projects change.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -70,11 +116,10 @@ export default function MapView({ projects, selectedId, onSelect }) {
     else map.once('load', update);
   }, [projects]);
 
-  // Fly to the selected project.
   useEffect(() => {
-    const project = projects.find((p) => p.id === selectedId);
+    const project = projects.find((p) => p.parcel_id === selectedId);
     if (project && mapRef.current) {
-      mapRef.current.flyTo({ center: [project.lon, project.lat], zoom: 9 });
+      mapRef.current.flyTo({ center: [project.lon, project.lat], zoom: 15 });
     }
   }, [selectedId, projects]);
 
